@@ -1,0 +1,69 @@
+name: Android CI Build
+
+on:
+  push:
+    branches: ["*"] # Berjalan di semua branch
+  workflow_dispatch: # Pengganti 'manual' trigger di GitLab
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: 
+      image: jangrewe/gitlab-ci-android:latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        run: |
+          apt update && apt install -y openjdk-17-jdk
+          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
+          echo "/usr/lib/jvm/java-17-openjdk-amd64/bin" >> $GITHUB_PATH
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.gradle/caches
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Extract Project Info & Prepare
+        shell: bash
+        run: |
+          PACKAGE=$(sed -n 's/.*package="\([^"]*\)".*/\1/p' ./AndroidManifest.xml)
+          if [ -z "$PACKAGE" ]; then PACKAGE=$(sed -n 's/.*applicationId[[:blank:]]*"\([^"]*\)".*/\1/p' ./app/build.gradle); fi
+          
+          VERSION_NAME=$(sed -n 's/.*versionName[[:blank:]]*"\([^"]*\)".*/\1/p' ./app/build.gradle)
+          VERSION_CODE=$(sed -n 's/.*versionCode[[:blank:]]*\([0-9]*\).*/\1/p' ./app/build.gradle)
+          APK_NAME="${PACKAGE}_${VERSION_CODE}"
+          
+          # Simpan variabel ke environment GitHub agar bisa dipakai di step selanjutnya
+          echo "APK_NAME=$APK_NAME" >> $GITHUB_ENV
+          
+          chmod +x ./gradlew
+          mkdir -p ./result/
+
+      # --- LOGIC PEMILIHAN BUILD (Debug vs Release) ---
+
+      - name: Build Debug APK
+        if: github.ref != 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+        run: |
+          ./gradlew assembleDebug
+          mv ./build/outputs/apk/debug/*-debug.apk ./result/${{ env.APK_NAME }}-debug.apk
+
+      - name: Build Release APK
+        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+        run: |
+          ./gradlew assembleRelease
+          mv ./build/outputs/apk/release/*-release-unsigned.apk ./result/${{ env.APK_NAME }}.apk
+
+      # --- ARTIFACTS ---
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build-${{ github.sha }}
+          path: ./result/*.apk
+          retention-days: 7

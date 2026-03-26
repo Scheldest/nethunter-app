@@ -32,14 +32,14 @@ jobs:
       - name: Extract Project Info & Prepare
         shell: bash
         run: |
+          # Cari di root folder sesuai GitLab CI lama kamu
           PACKAGE=$(sed -n 's/.*package="\([^"]*\)".*/\1/p' ./AndroidManifest.xml)
-          if [ -z "$PACKAGE" ]; then PACKAGE=$(sed -n 's/.*applicationId[[:blank:]]*"\([^"]*\)".*/\1/p' ./app/build.gradle); fi
+          if [ -z "$PACKAGE" ]; then PACKAGE=$(sed -n 's/.*applicationId[[:blank:]]*"\([^"]*\)".*/\1/p' ./build.gradle); fi
           
-          VERSION_NAME=$(sed -n 's/.*versionName[[:blank:]]*"\([^"]*\)".*/\1/p' ./app/build.gradle)
-          VERSION_CODE=$(sed -n 's/.*versionCode[[:blank:]]*\([0-9]*\).*/\1/p' ./app/build.gradle)
+          VERSION_NAME=$(sed -n 's/.*versionName[[:blank:]]*"\([^"]*\)".*/\1/p' ./build.gradle)
+          VERSION_CODE=$(sed -n 's/.*versionCode[[:blank:]]*\([0-9]*\).*/\1/p' ./build.gradle)
+          
           APK_NAME="${PACKAGE}_${VERSION_CODE}"
-          
-          # Simpan variabel ke environment GitHub agar bisa dipakai di step selanjutnya
           echo "APK_NAME=$APK_NAME" >> $GITHUB_ENV
           
           chmod +x ./gradlew
